@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Device" ADD COLUMN     "cpuUsage" DOUBLE PRECISION,
+ADD COLUMN     "diskUsage" DOUBLE PRECISION,
+ADD COLUMN     "ramUsage" DOUBLE PRECISION;

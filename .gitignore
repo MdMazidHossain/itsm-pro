@@ -1,0 +1,41 @@
+@'
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+.next/
+out/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Prisma
+*.db
+*.db-journal
+
+# .NET
+bin/
+obj/
+
+# Temporary
+.turbo/
+*.tsbuildinfo
+'@ | Out-File -FilePath .gitignore -Encoding utf8

@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  COMPANY_ADMIN
+  TECHNICIAN
+  EMPLOYEE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum AssetStatus {
+  IN_USE
+  IN_STORAGE
+  UNDER_MAINTENANCE
+  RETIRED
+}
+
+enum AssetType {
+  LAPTOP
+  DESKTOP
+  PRINTER
+  SERVER
+  NETWORK_DEVICE
+  UPS
+  OTHER
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+}
+
+model Tenant {
+  id        String       @id @default(uuid())
+  name      String
+  subdomain String       @unique
+  status    TenantStatus @default(TRIAL)
+  logoUrl   String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  users     User[]
+  auditLogs AuditLog[]
+  assets    Asset[]
+  devices   Device[]
+
+  @@index([subdomain])
+}
+
+model User {
+  id           String     @id @default(uuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         UserRole   @default(EMPLOYEE)
+  status       UserStatus @default(ACTIVE)
+  mfaSecret    String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  auditLogs    AuditLog[]
+  assets       Asset[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String?
+  entityId  String?
+  changes   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Asset {
+  id             String      @id @default(uuid())
+  tenantId       String
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String
+  type           AssetType
+  serialNumber   String?
+  status         AssetStatus @default(IN_STORAGE)
+  assignedToId   String?
+  assignedTo     User?       @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  purchaseDate   DateTime?
+  warrantyExpiry DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([tenantId])
+  @@index([assignedToId])
+}
+
+model Device {
+  id            String       @id @default(uuid())
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  hostname      String
+  agentId       String       @unique
+  osInfo        String?
+  ipAddress     String?
+  cpuUsage      Float?
+  ramUsage      Float?
+  diskUsage     Float?
+  lastHeartbeat DateTime     @default(now())
+  status        DeviceStatus @default(ONLINE)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([tenantId])
+  @@index([agentId])
+}
