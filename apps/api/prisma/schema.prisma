@@ -48,20 +48,73 @@ enum DeviceStatus {
   OFFLINE
 }
 
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum DiagnosticSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum RemediationStatus {
+  PENDING
+  APPROVED
+  EXECUTED
+  REJECTED
+  FAILED
+}
+
+enum SLAStatus {
+  MET
+  BREACHED
+  PENDING
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+enum LicenseStatus {
+  ACTIVE
+  EXPIRED
+  EXPIRING
+}
+
 model Tenant {
-  id        String       @id @default(uuid())
-  name      String
-  subdomain String       @unique
-  status    TenantStatus @default(TRIAL)
-  logoUrl   String?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-
-  users     User[]
-  auditLogs AuditLog[]
-  assets    Asset[]
-  devices   Device[]
-
+  id                 String            @id @default(uuid())
+  name               String
+  subdomain          String            @unique
+  status             TenantStatus      @default(TRIAL)
+  logoUrl            String?
+  subscriptionPlanId String?
+  subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
+  subscriptionEndsAt DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  users              User[]
+  auditLogs          AuditLog[]
+  assets             Asset[]
+  devices            Device[]
+  invoices           Invoice[]
+  diagnostics        Diagnostic[]
+  remediations       RemediationAction[]
+  slas               SLA[]
+  maintenance        MaintenanceSchedule[]
+  licenses           SoftwareLicense[]
+  kbArticles         KnowledgeBase[]
   @@index([subdomain])
 }
 
@@ -79,10 +132,8 @@ model User {
   lastLoginAt  DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
-
   auditLogs    AuditLog[]
   assets       Asset[]
-
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([email])
@@ -101,7 +152,6 @@ model AuditLog {
   ipAddress String?
   userAgent String?
   createdAt DateTime @default(now())
-
   @@index([tenantId])
   @@index([userId])
   @@index([createdAt])
@@ -121,27 +171,147 @@ model Asset {
   warrantyExpiry DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
-
   @@index([tenantId])
   @@index([assignedToId])
 }
 
 model Device {
-  id            String       @id @default(uuid())
+  id            String        @id @default(uuid())
   tenantId      String
-  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   hostname      String
-  agentId       String       @unique
+  agentId       String        @unique
   osInfo        String?
   ipAddress     String?
   cpuUsage      Float?
   ramUsage      Float?
   diskUsage     Float?
-  lastHeartbeat DateTime     @default(now())
-  status        DeviceStatus @default(ONLINE)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-
+  lastHeartbeat DateTime      @default(now())
+  status        DeviceStatus  @default(ONLINE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  diagnostics   Diagnostic[]
   @@index([tenantId])
   @@index([agentId])
+}
+
+model SubscriptionPlan {
+  id           String       @id @default(uuid())
+  name         String
+  description  String?
+  price        Float
+  billingCycle BillingCycle @default(MONTHLY)
+  maxUsers     Int          @default(10)
+  maxAssets    Int          @default(50)
+  maxDevices   Int          @default(10)
+  features     Json?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  tenants      Tenant[]
+}
+
+model Invoice {
+  id            String        @id @default(uuid())
+  tenantId      String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoiceNumber String        @unique
+  amount        Float
+  status        InvoiceStatus @default(PENDING)
+  dueDate       DateTime
+  paidAt        DateTime?
+  description   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Diagnostic {
+  id           String             @id @default(uuid())
+  tenantId     String
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deviceId     String?
+  device       Device?            @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  title        String
+  description  String
+  severity     DiagnosticSeverity @default(INFO)
+  category     String
+  isResolved   Boolean            @default(false)
+  metadata     Json?
+  createdAt    DateTime           @default(now())
+  resolvedAt   DateTime?
+  remediations RemediationAction[]
+  @@index([tenantId])
+  @@index([deviceId])
+  @@index([severity])
+}
+
+model RemediationAction {
+  id           String            @id @default(uuid())
+  tenantId     String
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  diagnosticId String
+  diagnostic   Diagnostic        @relation(fields: [diagnosticId], references: [id], onDelete: Cascade)
+  actionName   String
+  status       RemediationStatus @default(PENDING)
+  approvedById String?
+  executedAt   DateTime?
+  result       String?
+  createdAt    DateTime          @default(now())
+  @@index([tenantId])
+  @@index([status])
+}
+
+model SLA {
+  id             String @id @default(uuid())
+  tenantId       String
+  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String
+  priority       String
+  responseTime   Int
+  resolutionTime Int
+  createdAt      DateTime @default(now())
+  @@index([tenantId])
+}
+
+model MaintenanceSchedule {
+  id          String            @id @default(uuid())
+  tenantId    String
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assetId     String?
+  title       String
+  description String?
+  scheduledAt DateTime
+  status      MaintenanceStatus @default(SCHEDULED)
+  completedAt DateTime?
+  createdAt   DateTime          @default(now())
+  @@index([tenantId])
+}
+
+model SoftwareLicense {
+  id         String        @id @default(uuid())
+  tenantId   String
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  vendor     String?
+  totalSeats Int
+  usedSeats  Int           @default(0)
+  expiryDate DateTime?
+  status     LicenseStatus @default(ACTIVE)
+  createdAt  DateTime      @default(now())
+  @@index([tenantId])
+}
+
+model KnowledgeBase {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  category  String
+  isPublic  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([tenantId])
 }
