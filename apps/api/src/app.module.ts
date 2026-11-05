@@ -11,19 +11,13 @@ import { BillingModule } from './billing/billing.module';
 import { TroubleshootingModule } from './troubleshooting/troubleshooting.module';
 import { Phase8Module } from './phase8/phase8.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { SuperAdminModule } from './superadmin/superadmin.module';
 
 @Module({
   imports: [
-    PrismaModule,
-    HealthModule,
-    AuthModule,
-    UsersModule,
-    AssetsModule,
-    DevicesModule,
-    BillingModule,
-    TroubleshootingModule,
-    Phase8Module,
-    TicketsModule,
+    PrismaModule, HealthModule, AuthModule, UsersModule, AssetsModule,
+    DevicesModule, BillingModule, TroubleshootingModule, Phase8Module,
+    TicketsModule, SuperAdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],
