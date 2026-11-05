@@ -93,6 +93,20 @@ enum LicenseStatus {
   EXPIRING
 }
 
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
 model Tenant {
   id                 String            @id @default(uuid())
   name               String
@@ -115,25 +129,31 @@ model Tenant {
   maintenance        MaintenanceSchedule[]
   licenses           SoftwareLicense[]
   kbArticles         KnowledgeBase[]
+  tickets            Ticket[]
+
   @@index([subdomain])
 }
 
 model User {
-  id           String     @id @default(uuid())
-  tenantId     String
-  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email        String
-  passwordHash String
-  firstName    String
-  lastName     String
-  role         UserRole   @default(EMPLOYEE)
-  status       UserStatus @default(ACTIVE)
-  mfaSecret    String?
-  lastLoginAt  DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  auditLogs    AuditLog[]
-  assets       Asset[]
+  id              String     @id @default(uuid())
+  tenantId        String
+  tenant          Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email           String
+  passwordHash    String
+  firstName       String
+  lastName        String
+  role            UserRole   @default(EMPLOYEE)
+  status          UserStatus @default(ACTIVE)
+  mfaSecret       String?
+  lastLoginAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  auditLogs       AuditLog[]
+  assets          Asset[]
+  ticketsCreated  Ticket[]   @relation("TicketCreatedBy")
+  ticketsAssigned Ticket[]   @relation("TicketAssignedTo")
+  comments        TicketComment[]
+
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([email])
@@ -152,6 +172,7 @@ model AuditLog {
   ipAddress String?
   userAgent String?
   createdAt DateTime @default(now())
+
   @@index([tenantId])
   @@index([userId])
   @@index([createdAt])
@@ -171,26 +192,28 @@ model Asset {
   warrantyExpiry DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
+
   @@index([tenantId])
   @@index([assignedToId])
 }
 
 model Device {
-  id            String        @id @default(uuid())
+  id            String       @id @default(uuid())
   tenantId      String
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   hostname      String
-  agentId       String        @unique
+  agentId       String       @unique
   osInfo        String?
   ipAddress     String?
   cpuUsage      Float?
   ramUsage      Float?
   diskUsage     Float?
-  lastHeartbeat DateTime      @default(now())
-  status        DeviceStatus  @default(ONLINE)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  lastHeartbeat DateTime     @default(now())
+  status        DeviceStatus @default(ONLINE)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
   diagnostics   Diagnostic[]
+
   @@index([tenantId])
   @@index([agentId])
 }
@@ -223,6 +246,7 @@ model Invoice {
   description   String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+
   @@index([tenantId])
   @@index([status])
 }
@@ -242,6 +266,7 @@ model Diagnostic {
   createdAt    DateTime           @default(now())
   resolvedAt   DateTime?
   remediations RemediationAction[]
+
   @@index([tenantId])
   @@index([deviceId])
   @@index([severity])
@@ -259,19 +284,21 @@ model RemediationAction {
   executedAt   DateTime?
   result       String?
   createdAt    DateTime          @default(now())
+
   @@index([tenantId])
   @@index([status])
 }
 
 model SLA {
-  id             String @id @default(uuid())
+  id             String   @id @default(uuid())
   tenantId       String
-  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name           String
   priority       String
   responseTime   Int
   resolutionTime Int
   createdAt      DateTime @default(now())
+
   @@index([tenantId])
 }
 
@@ -286,6 +313,7 @@ model MaintenanceSchedule {
   status      MaintenanceStatus @default(SCHEDULED)
   completedAt DateTime?
   createdAt   DateTime          @default(now())
+
   @@index([tenantId])
 }
 
@@ -300,6 +328,7 @@ model SoftwareLicense {
   expiryDate DateTime?
   status     LicenseStatus @default(ACTIVE)
   createdAt  DateTime      @default(now())
+
   @@index([tenantId])
 }
 
@@ -313,5 +342,45 @@ model KnowledgeBase {
   isPublic  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   @@index([tenantId])
+}
+
+model Ticket {
+  id           String          @id @default(uuid())
+  tenantId     String
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticketNumber String          @unique
+  subject      String
+  description  String
+  priority     TicketPriority  @default(MEDIUM)
+  status       TicketStatus    @default(OPEN)
+  createdById  String
+  createdBy    User            @relation("TicketCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  assignedToId String?
+  assignedTo   User?           @relation("TicketAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  category     String?
+  slaDeadline  DateTime?
+  resolvedAt   DateTime?
+  closedAt     DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  comments     TicketComment[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([assignedToId])
+}
+
+model TicketComment {
+  id         String   @id @default(uuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message    String
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([ticketId])
 }
